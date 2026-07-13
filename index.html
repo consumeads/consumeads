@@ -118,7 +118,7 @@
 
   #banner{
     position:absolute; right:0; bottom:0; z-index:9;
-    min-width:230px; min-height:98px;
+    min-width:230px; min-height:135px;
     display:flex; flex-direction:column; justify-content:center;
     background:linear-gradient(105deg, #101014 0%, #17171d 100%);
     border-top:3px solid var(--yellow);
@@ -139,6 +139,18 @@
     font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--dim);
     margin-top:2px; white-space:nowrap; overflow:hidden;
   }
+
+  #soundHint{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:10; cursor:pointer;
+    font-size:14px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--yellow); background:rgba(0,0,0,.72);
+    border:1px solid var(--yellow);
+    padding:12px 26px;
+    user-select:none;
+    animation:flick 4s linear infinite;
+  }
+  #soundHint.gone{display:none;}
 
   #errMsg{
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -167,7 +179,7 @@
   }
 
   @media (prefers-reduced-motion:reduce){
-    #banner .adword, #lapse .warn{animation:none;}
+    #banner .adword, #soundHint, #lapse .warn{animation:none;}
     #bug .live::before{animation:none;}
   }
   @media (max-width:640px){
@@ -177,8 +189,8 @@
 </head>
 <body>
 
-<video id="vidA" playsinline preload="auto"></video>
-<video id="vidB" playsinline preload="auto"></video>
+<video id="vidA" playsinline preload="auto" muted></video>
+<video id="vidB" playsinline preload="auto" muted></video>
 
 <div id="crt"></div>
 
@@ -207,6 +219,8 @@
   <div class="warn">Attention lapse detected</div>
   <div class="sub">Your absence has been logged</div>
 </div>
+
+<div id="soundHint">Tap for sound</div>
 
 <script>
 /* =====================================================================
@@ -360,7 +374,7 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
       fail('Dead air', `The "${FOLDER}" folder has no video files yet.`);
       return;
     }
-    playNext(true);
+    playNext();
   }
 
   function updateHud(){
@@ -368,7 +382,7 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
     $('bannerNum').textContent = '#' + String(watched + 1).padStart(3,'0');
   }
 
-  function playNext(first = false){
+  function playNext(){
     current = nextIndex();
     const cur = vids[active];
     const nxtKey = active === 'A' ? 'B' : 'A';
@@ -387,19 +401,7 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
       updateHud();
     };
 
-    if (first){
-      /* Try to open with sound. If the browser blocks unmuted
-         autoplay, fall back to muted playback and silently unmute
-         on the first interaction — no overlay, no prompt. */
-      nxt.muted = false;
-      nxt.play().then(swap).catch(() => {
-        nxt.muted = true;
-        vids.A.muted = true; vids.B.muted = true;
-        nxt.play().then(swap).catch(swap);
-      });
-    } else {
-      nxt.play().then(swap).catch(swap);
-    }
+    nxt.play().then(swap).catch(swap);
   }
 
   const advance = () => { watched++; playNext(); };
@@ -408,22 +410,21 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
   vids.A.addEventListener('error', () => { if (playlist.length) setTimeout(() => playNext(), 400); });
   vids.B.addEventListener('error', () => { if (playlist.length) setTimeout(() => playNext(), 400); });
 
-  /* First interaction: unlock audio quietly. Unmutes the broadcast
-     (if the browser forced a muted start) and powers the AudioContext
-     the tab-away alarm needs. No visible prompt. */
-  function unlockAudio(){
+  /* unmute on first interaction — browsers require muted autoplay.
+     The same gesture unlocks the AudioContext used by the alarm. */
+  function enableSound(){
     vids.A.muted = false; vids.B.muted = false;
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       audioCtx.resume().catch(()=>{});
     } catch {}
-    document.removeEventListener('click', unlockAudio);
-    document.removeEventListener('touchstart', unlockAudio);
-    document.removeEventListener('keydown', unlockAudio);
+    document.getElementById('soundHint').classList.add('gone');
+    vids[active].play().catch(()=>{});
+    document.removeEventListener('click', enableSound);
+    document.removeEventListener('touchstart', enableSound);
   }
-  document.addEventListener('click', unlockAudio);
-  document.addEventListener('touchstart', unlockAudio);
-  document.addEventListener('keydown', unlockAudio);
+  document.addEventListener('click', enableSound);
+  document.addEventListener('touchstart', enableSound);
 
   loadPlaylist();
 })();
