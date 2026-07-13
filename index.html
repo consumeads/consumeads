@@ -66,14 +66,6 @@
     opacity:.55;
   }
 
-  #static{
-    position:absolute; inset:0; z-index:6; pointer-events:none;
-    opacity:0; background:#000;
-  }
-  #static.zap{animation:zap .28s steps(2,end);}
-  @keyframes zap{0%{opacity:1;}100%{opacity:0;}}
-  #static canvas{width:100%; height:100%;}
-
   #bug{
     position:absolute; top:22px; left:24px; z-index:8;
     display:flex; align-items:center; gap:10px;
@@ -148,18 +140,6 @@
     margin-top:2px; white-space:nowrap; overflow:hidden;
   }
 
-  #soundHint{
-    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    z-index:10; cursor:pointer;
-    font-size:14px; letter-spacing:.3em; text-transform:uppercase;
-    color:var(--yellow); background:rgba(0,0,0,.72);
-    border:1px solid var(--yellow);
-    padding:12px 26px;
-    user-select:none;
-    animation:flick 4s linear infinite;
-  }
-  #soundHint.gone{display:none;}
-
   #errMsg{
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
     z-index:10; text-align:center;
@@ -187,9 +167,8 @@
   }
 
   @media (prefers-reduced-motion:reduce){
-    #banner .adword, #soundHint, #lapse .warn{animation:none;}
+    #banner .adword, #lapse .warn{animation:none;}
     #bug .live::before{animation:none;}
-    #static.zap{animation:none; opacity:0;}
   }
   @media (max-width:640px){
     #bug .live{display:none;}
@@ -198,10 +177,9 @@
 </head>
 <body>
 
-<video id="vidA" playsinline preload="auto" muted></video>
-<video id="vidB" playsinline preload="auto" muted></video>
+<video id="vidA" playsinline preload="auto"></video>
+<video id="vidB" playsinline preload="auto"></video>
 
-<div id="static"><canvas id="noise"></canvas></div>
 <div id="crt"></div>
 
 <div id="bug">
@@ -215,12 +193,12 @@
   <div class="fine">Broadcasting since 2026 · A subsidiary of a subsidiary</div>
 </div>
 
-<div id="counter"><b id="cNow">–</b> / <span id="cTotal">–</span></div>
+<div id="counter">Ads watched <b id="cWatched">0</b></div>
 
 <div id="banner">
   <div class="row1">
     <span class="adword">AD BREAK</span>
-    <span class="num" id="bannerNum">#—</span>
+    <span class="num" id="bannerNum">#000</span>
   </div>
   <div class="row2">Sponsored transmission</div>
 </div>
@@ -229,8 +207,6 @@
   <div class="warn">Attention lapse detected</div>
   <div class="sub">Your absence has been logged</div>
 </div>
-
-<div id="soundHint">Tap for sound</div>
 
 <script>
 /* =====================================================================
@@ -261,8 +237,10 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
   const vids = { A: $('vidA'), B: $('vidB') };
   vids.B.style.display = 'none';
   let active = 'A';
-  let pos = 0;
   let playlist = [];   // [{name, url}]
+  let bag = [];        // shuffled order, refilled when empty
+  let current = null;  // index of the ad on screen
+  let watched = 0;     // session "ads watched" tally
 
   /* company logo → tiny about card */
   const about = $('about');
@@ -339,6 +317,26 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
     return { owner: m[1], repo: seg.length ? seg[0] : m[1] + '.github.io' };
   }
 
+  /* ---------------- random order ----------------
+     Shuffle-bag: every ad plays once per cycle in a random order,
+     then the bag refills and reshuffles. Never repeats the same ad
+     back-to-back across the refill boundary. */
+  function refillBag(){
+    bag = playlist.map((_, i) => i);
+    for (let i = bag.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+    // avoid immediate repeat when a new bag starts
+    if (playlist.length > 1 && bag[0] === current){
+      [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
+    }
+  }
+  function nextIndex(){
+    if (!bag.length) refillBag();
+    return bag.shift();
+  }
+
   async function loadPlaylist(){
     const r = detectRepo();
     if (!r){
@@ -356,29 +354,27 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
     const items = await resp.json();
     playlist = items
       .filter(f => f.type === 'file' && /\.(mp4|webm|mov|m4v)$/i.test(f.name))
-      .map(f => ({ name: f.name.replace(/\.[^.]+$/,''), url: f.download_url }))
-      .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+      .map(f => ({ name: f.name.replace(/\.[^.]+$/,''), url: f.download_url }));
 
     if (!playlist.length){
       fail('Dead air', `The "${FOLDER}" folder has no video files yet.`);
       return;
     }
-    $('cTotal').textContent = playlist.length;
-    playAt(0, false);
+    playNext(true);
   }
 
   function updateHud(){
-    $('cNow').textContent = pos + 1;
-    $('bannerNum').textContent = '#' + String(pos + 1).padStart(3,'0');
+    $('cWatched').textContent = watched;
+    $('bannerNum').textContent = '#' + String(watched + 1).padStart(3,'0');
   }
 
-  function playAt(newPos, withZap = true){
-    pos = ((newPos % playlist.length) + playlist.length) % playlist.length;
+  function playNext(first = false){
+    current = nextIndex();
     const cur = vids[active];
     const nxtKey = active === 'A' ? 'B' : 'A';
     const nxt = vids[nxtKey];
 
-    nxt.src = playlist[pos].url;
+    nxt.src = playlist[current].url;
     nxt.muted = cur.muted;
 
     const swap = () => {
@@ -390,49 +386,44 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
       active = nxtKey;
       updateHud();
     };
-    nxt.play().then(swap).catch(swap);
-    if (withZap) zap();
+
+    if (first){
+      /* Try to open with sound. If the browser blocks unmuted
+         autoplay, fall back to muted playback and silently unmute
+         on the first interaction — no overlay, no prompt. */
+      nxt.muted = false;
+      nxt.play().then(swap).catch(() => {
+        nxt.muted = true;
+        vids.A.muted = true; vids.B.muted = true;
+        nxt.play().then(swap).catch(swap);
+      });
+    } else {
+      nxt.play().then(swap).catch(swap);
+    }
   }
 
-  const advance = () => playAt(pos + 1);
+  const advance = () => { watched++; playNext(); };
   vids.A.addEventListener('ended', advance);
   vids.B.addEventListener('ended', advance);
-  vids.A.addEventListener('error', () => { if (playlist.length) setTimeout(advance, 400); });
-  vids.B.addEventListener('error', () => { if (playlist.length) setTimeout(advance, 400); });
+  vids.A.addEventListener('error', () => { if (playlist.length) setTimeout(() => playNext(), 400); });
+  vids.B.addEventListener('error', () => { if (playlist.length) setTimeout(() => playNext(), 400); });
 
-  /* static burst */
-  const noiseCv = $('noise'), staticEl = $('static');
-  function zap(){
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const c = noiseCv.getContext('2d');
-    noiseCv.width = 320; noiseCv.height = 180;
-    const img = c.createImageData(320, 180);
-    for (let i = 0; i < img.data.length; i += 4){
-      const v = Math.random() * 255 | 0;
-      img.data[i] = img.data[i+1] = img.data[i+2] = v;
-      img.data[i+3] = 255;
-    }
-    c.putImageData(img, 0, 0);
-    staticEl.classList.remove('zap');
-    void staticEl.offsetWidth;
-    staticEl.classList.add('zap');
-  }
-
-  /* unmute on first interaction — browsers require muted autoplay.
-     The same gesture unlocks the AudioContext used by the alarm. */
-  function enableSound(){
+  /* First interaction: unlock audio quietly. Unmutes the broadcast
+     (if the browser forced a muted start) and powers the AudioContext
+     the tab-away alarm needs. No visible prompt. */
+  function unlockAudio(){
     vids.A.muted = false; vids.B.muted = false;
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       audioCtx.resume().catch(()=>{});
     } catch {}
-    $('soundHint').classList.add('gone');
-    vids[active].play().catch(()=>{});
-    document.removeEventListener('click', enableSound);
-    document.removeEventListener('touchstart', enableSound);
+    document.removeEventListener('click', unlockAudio);
+    document.removeEventListener('touchstart', unlockAudio);
+    document.removeEventListener('keydown', unlockAudio);
   }
-  document.addEventListener('click', enableSound);
-  document.addEventListener('touchstart', enableSound);
+  document.addEventListener('click', unlockAudio);
+  document.addEventListener('touchstart', unlockAudio);
+  document.addEventListener('keydown', unlockAudio);
 
   loadPlaylist();
 })();
