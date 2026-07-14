@@ -116,29 +116,7 @@
   }
   #counter b{color:var(--text); font-weight:700;}
 
-  #banner{
-    position:absolute; right:0; bottom:0; z-index:9;
-    min-width:230px; min-height:135px;
-    display:flex; flex-direction:column; justify-content:center;
-    background:linear-gradient(105deg, #101014 0%, #17171d 100%);
-    border-top:3px solid var(--yellow);
-    border-left:3px solid var(--yellow);
-    padding:10px 18px 12px 16px;
-    user-select:none; pointer-events:none;
-    box-shadow:-6px -6px 24px rgba(0,0,0,.6);
-  }
-  #banner .row1{display:flex; align-items:baseline; gap:8px;}
-  #banner .adword{
-    font-weight:800; font-size:26px; letter-spacing:.05em;
-    color:var(--yellow);
-    animation:flick 6s linear infinite;
-  }
   @keyframes flick{0%,93%,95%,100%{opacity:1;}94%{opacity:.35;}}
-  #banner .num{font-size:15px; color:var(--cyan); letter-spacing:.12em; font-weight:600;}
-  #banner .row2{
-    font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--dim);
-    margin-top:2px; white-space:nowrap; overflow:hidden;
-  }
 
   #soundHint{
     position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -179,7 +157,7 @@
   }
 
   @media (prefers-reduced-motion:reduce){
-    #banner .adword, #soundHint, #lapse .warn{animation:none;}
+    #soundHint, #lapse .warn{animation:none;}
     #bug .live::before{animation:none;}
   }
   @media (max-width:640px){
@@ -206,14 +184,6 @@
 </div>
 
 <div id="counter">Ads watched <b id="cWatched">0</b></div>
-
-<div id="banner">
-  <div class="row1">
-    <span class="adword">AD BREAK</span>
-    <span class="num" id="bannerNum">#000</span>
-  </div>
-  <div class="row2">Sponsored transmission</div>
-</div>
 
 <div id="lapse">
   <div class="warn">Attention lapse detected</div>
@@ -379,7 +349,6 @@ const FOLDER = "ads8";   // folder in the repo that holds the videos
 
   function updateHud(){
     $('cWatched').textContent = watched;
-    $('bannerNum').textContent = '#' + String(watched + 1).padStart(3,'0');
   }
 
   function playNext(){
